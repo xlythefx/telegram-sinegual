@@ -43,21 +43,18 @@ from telegram.ext import (
 from datetime import time as dtime, timedelta
 from apscheduler.triggers.cron import CronTrigger
 
-import json
 from pathlib import Path
 
 from stats import (daily_stats, weekly_stats, monthly_stats, PeriodStats,
-                   stats_to_dict, format_header, format_footer, fmt_money, get_conn)
+                   stats_to_dict, format_header, format_footer, fmt_money)
 from summarizer import (generate_summary, generate_greeting, generate_gold_update,
                         generate_exposure_post, generate_strategy_post,
-                        generate_execution_event, generate_status_post)
+                        generate_status_post)
 from market import gold_snapshot
 from exposure import exposure_snapshot
 from strategy_perf import strategy_summary
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
-STATE_FILE = Path(__file__).parent / "state.json"
 
 
 def _build(period: str) -> tuple[PeriodStats, str]:
@@ -288,12 +285,6 @@ def _setup_schedule(app: Application):
 
     # ---- operational stream (env-gated) -------------------------------------
 
-    exec_watch_min = _env_int("EXEC_WATCH_MINUTES", 5)
-    if exec_watch_min > 0:
-        jq.run_repeating(_exec_watcher, interval=timedelta(minutes=exec_watch_min),
-                         first=timedelta(seconds=20), name="exec_watch")
-        print(f"  - exec_watch    : every {exec_watch_min} min")
-
     exposure_hours = _env_int("EXPOSURE_HOURS", 6)
     if exposure_hours > 0:
         jq.run_repeating(_scheduled_send, interval=timedelta(hours=exposure_hours),
@@ -308,112 +299,6 @@ def _setup_schedule(app: Application):
         print(f"  - strategy_summary: Sundays 20:00 (window={strategy_days}d)")
 
 
-# ---- execution event watcher -----------------------------------------------
-
-EXEC_TABLES = {
-    # table -> (id col, query for one row)
-    "trades":              ("id", "SELECT id, ticker, pnl, strategy FROM trades WHERE id=%s"),
-    "binance_pastpositions":("id", "SELECT id, symbol AS ticker, realized_pnl AS pnl, strategy, side FROM binance_pastpositions WHERE id=%s"),
-    "ig_past_positions":   ("id", "SELECT id, ticker, pnl, strategy, side FROM ig_past_positions WHERE id=%s"),
-}
-
-SOURCE_LABEL = {
-    "trades": "Capital.com",
-    "binance_pastpositions": "Binance",
-    "ig_past_positions": "IG.com",
-}
-
-PER_RUN_EVENT_CAP = 5
-
-
-def _load_state() -> dict:
-    if not STATE_FILE.exists():
-        return {}
-    try:
-        return json.loads(STATE_FILE.read_text())
-    except Exception:
-        return {}
-
-
-def _save_state(state: dict):
-    STATE_FILE.write_text(json.dumps(state, indent=2))
-
-
-def _current_max_ids() -> dict[str, int]:
-    out = {}
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            for table in EXEC_TABLES:
-                cur.execute(f"SELECT COALESCE(MAX(id), 0) AS m FROM {table}")
-                out[table] = int(cur.fetchone()["m"])
-    finally:
-        conn.close()
-    return out
-
-
-def _fetch_new_rows(table: str, last_id: int, cap: int) -> list[dict]:
-    _, sql_one = EXEC_TABLES[table]
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"SELECT id FROM {table} WHERE id > %s ORDER BY id ASC LIMIT %s",
-                (last_id, cap),
-            )
-            ids = [r["id"] for r in cur.fetchall()]
-            rows = []
-            for new_id in ids:
-                cur.execute(sql_one, (new_id,))
-                row = cur.fetchone()
-                if row:
-                    rows.append(row)
-            return rows
-    finally:
-        conn.close()
-
-
-async def _exec_watcher(context: ContextTypes.DEFAULT_TYPE):
-    """Poll the three closed-trade tables, post one operational note per new row."""
-    chat_id = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
-    if not chat_id:
-        return
-
-    state = _load_state()
-
-    # First-run gate: no state file -> just snapshot current max IDs and exit.
-    if not state:
-        state = _current_max_ids()
-        _save_state(state)
-        print(f"[exec_watch] first run, baselined state: {state}")
-        return
-
-    posted = 0
-    for table in EXEC_TABLES:
-        if posted >= PER_RUN_EVENT_CAP:
-            break
-        last = int(state.get(table, 0))
-        new_rows = _fetch_new_rows(table, last, PER_RUN_EVENT_CAP - posted)
-        for row in new_rows:
-            event = {
-                "ticker": row.get("ticker") or "?",
-                "source": SOURCE_LABEL[table],
-                "side": row.get("side"),
-                "pnl": float(row.get("pnl") or 0),
-                "strategy": row.get("strategy") or "—",
-            }
-            try:
-                msg = await asyncio.to_thread(generate_execution_event, event)
-                await context.bot.send_message(chat_id, msg)
-                posted += 1
-                state[table] = int(row["id"])
-                print(f"[exec_watch] posted {table}#{row['id']}")
-            except Exception as e:
-                print(f"[exec_watch] FAILED {table}#{row['id']}: {e}")
-                # don't advance state — retry next cycle
-                break
-
-    _save_state(state)
 
 
 

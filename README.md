@@ -68,7 +68,6 @@ When the service is running, the bot listens for these in any chat it's a member
 | `weekly_recap` | Saturdays 06:00 | casual | (always on) |
 | `monthly_recap` | last day of month 23:00 | casual | (always on) |
 | `gold_update` | every 8h (00:00 / 08:00 / 16:00) | casual | (always on) |
-| `exec_watch` | every `EXEC_WATCH_MINUTES` | operational | `EXEC_WATCH_MINUTES=0` |
 | `exposure_state` | every `EXPOSURE_HOURS` | operational | `EXPOSURE_HOURS=0` |
 | `strategy_summary` | Sundays 20:00 (window=`STRATEGY_DAYS`d) | operational | `STRATEGY_DAYS=0` |
 
@@ -83,14 +82,13 @@ Two distinct system prompts in `summarizer.py`:
 
 Operational posts MUST avoid: exclamation marks, hype emojis, "let's go" energy, advice, calls to action.
 
-## Execution event watcher
+## Scope: summarization only
 
-Polls `MAX(id)` of `trades`, `binance_pastpositions`, `ig_past_positions` every
-`EXEC_WATCH_MINUTES`. When new rows appear, posts one operational-tone line per
-close (capped at 5 per cycle to prevent flood).
-
-State persists in `state.json` (gitignored). On first run with no state file,
-it baselines current max IDs and posts nothing — no historical backfill.
+Real-time entry/exit alerts are owned by the broker projects
+(CapitalFlask, binance-flask, igcom) — they fire `tg_send` the moment a
+master trade executes. This bot only handles **periodic summarization +
+market commentary**: recaps, exposure snapshots, strategy summaries, gold
+updates, greetings, system status. No event polling here.
 
 ## How tokens are conserved
 
@@ -124,4 +122,3 @@ Updates: `git pull` → (if requirements changed) `pip install -r requirements.t
 | `summarizer.py` | All Claude calls (two voice profiles) |
 | `ui.py` | Tkinter control panel + System Status modal |
 | `.env` | Secrets and schedule knobs (gitignored) |
-| `state.json` | Watcher cursor (gitignored, auto-created) |
