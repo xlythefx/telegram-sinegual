@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets — NEVER commit
+.env
+
+# Logs
+*.log
+service.log
+smoke.log
+smoke.err
+
+# OS junk
+Thumbs.db
+.DS_Store
