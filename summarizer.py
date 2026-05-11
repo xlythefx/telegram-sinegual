@@ -88,3 +88,84 @@ def generate_gold_update(snapshot: dict) -> str:
         + json.dumps(snapshot, indent=2),
         max_tokens=400,
     )
+
+
+# ---- operational stream (calm / disciplined voice) -----------------------
+
+_OPERATIONAL_SYSTEM = (
+    "You write for SineguAlerts' operational transparency stream. "
+    "Voice: calm, structured, disciplined, factual. Never excited, never hype, "
+    "no exclamation marks, no rocket/fire/money emojis. At most one understated "
+    "marker per post (·, →, —). Short. State what the system did or observed. "
+    "No advice, no calls to action, no 'let's go' energy. The reader is "
+    "observing a real execution environment, not a signal subscriber.\n\n"
+    "Formatting: money as 1,234.50 (comma thousands, two decimals, no currency "
+    "symbol). Percentages as 12.34%. Never invent a number not present in data."
+)
+
+
+def generate_exposure_post(snapshot: dict) -> str:
+    import json
+    if snapshot["open_count"] == 0:
+        return _ask_claude(
+            _OPERATIONAL_SYSTEM,
+            "Write a 1-2 sentence operational note that the system currently "
+            "holds no active positions. Calm, factual.",
+            max_tokens=120,
+        )
+    return _ask_claude(
+        _OPERATIONAL_SYSTEM,
+        "Write a brief exposure-state note for the operational stream. "
+        "Mention how many positions are open, total notional, net unrealized PnL, "
+        "and a glance at strategy or ticker concentration if relevant. "
+        "Under 80 words. Use ONLY this data:\n\n" + json.dumps(snapshot, indent=2),
+        max_tokens=300,
+    )
+
+
+def generate_strategy_post(summary: dict) -> str:
+    import json
+    if not summary["strategies"]:
+        return _ask_claude(
+            _OPERATIONAL_SYSTEM,
+            f"Write a brief operational note that no strategy activity was "
+            f"recorded in the last {summary['window_days']} days. Calm, factual.",
+            max_tokens=120,
+        )
+    return _ask_claude(
+        _OPERATIONAL_SYSTEM,
+        f"Write a brief strategy-behavior summary covering the last "
+        f"{summary['window_days']} days. State each strategy's trade count, "
+        f"win rate, and total PnL. Lead with the strategy that contributed most. "
+        f"Under 100 words. Use ONLY this data:\n\n" + json.dumps(summary, indent=2),
+        max_tokens=400,
+    )
+
+
+def generate_execution_event(event: dict) -> str:
+    """One-liner for a single closed position. event keys: ticker, source,
+    side, pnl, strategy."""
+    import json
+    return _ask_claude(
+        _OPERATIONAL_SYSTEM,
+        "Write a SINGLE-LINE operational event note for a position that just "
+        "closed. Use the marker ' · ' between fields. Format example: "
+        "'Position closed · GOLD on IG.com · VWMA-Reversion · +1,234.50'. "
+        "Adapt to actual data. No prose, no second sentence.\n\n"
+        + json.dumps(event, indent=2),
+        max_tokens=120,
+    )
+
+
+def generate_status_post(version: str, revision: str, notes: str) -> str:
+    return _ask_claude(
+        _OPERATIONAL_SYSTEM,
+        f"Rewrite these raw release notes as a calm system status announcement "
+        f"for the operational channel. Lead with the version and revision flag. "
+        f"Translate jargon into plain operational language. No marketing tone. "
+        f"Under 120 words.\n\n"
+        f"Version: {version}\n"
+        f"Revision: {revision}\n"
+        f"Notes:\n{notes}",
+        max_tokens=500,
+    )

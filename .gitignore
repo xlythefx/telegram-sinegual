@@ -13,6 +13,9 @@ service.log
 smoke.log
 smoke.err
 
+# Watcher state — must NOT be committed (per-deployment cursor)
+state.json
+
 # OS junk
 Thumbs.db
 .DS_Store
