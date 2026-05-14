@@ -232,34 +232,99 @@ async def cmd_whoami(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Short welcome — full reference is in /help."""
     base = (
         "Sinegualerts publisher online.\n\n"
-        "Public commands:\n"
-        "/daily - today's recap\n"
-        "/weekly - this week's recap\n"
-        "/monthly - this month's recap\n"
-        "/greeting - casual hello to the channel\n"
-        "/gold - live gold price update with news\n"
-        "/exposure - current open-position exposure\n"
-        "/strategies - last 7-day strategy performance breakdown\n"
-        "/chatid - show this chat's id\n"
-        "/whoami - show your user id (use for TELEGRAM_ADMIN_USER_IDS)"
+        "Type /help for the full command reference."
     )
     if _is_admin(update):
-        base += (
-            "\n\nAdmin commands:\n"
-            "/broadcast <text> - send a custom message to the public channel\n"
-            "/draft <mode> - draft a post (daily|weekly|monthly|greeting|gold|"
-            "exposure|strategies|knowledge) with Approve/Regenerate/Discard buttons\n"
-            "/knowledge - shortcut for /draft knowledge (brand-philosophy post from docs/)\n"
-            "/ask <prompt> - free-form AI assist (replies in this chat only)\n"
-            "/dryrun <mode> - render a post here without publishing\n"
-            "/docs - list loaded brand docs and today's focus (docs/daily.md)\n"
-            "/force_<mode> - publish immediately, skipping approval (daily, weekly, monthly, "
-            "greeting, gold, exposure, strategies, knowledge)\n"
-            "/reload_env - reload .env without restarting the service"
-        )
+        base += "\n\nYou are an admin — /help will include admin commands."
     await update.message.reply_text(base)
+
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Full command reference. Admin commands appear only for admins."""
+    is_admin = _is_admin(update)
+
+    lines = ["*Sinegualerts Publisher — Help*", ""]
+
+    # ---- Public commands ----
+    lines += [
+        "*Public commands* (anyone in the chat)",
+        "",
+        "*Recaps & summaries*",
+        "  /daily — today's trading recap",
+        "  /weekly — this week's recap",
+        "  /monthly — this month's recap",
+        "  /strategies — last 7-day strategy performance breakdown",
+        "  /exposure — current open-position exposure",
+        "",
+        "*Market & community*",
+        "  /gold — live gold price with news commentary",
+        "  /greeting — casual hello to the channel",
+        "",
+        "*Utility*",
+        "  /chatid — show this chat's id (use for TELEGRAM\\_CHANNEL\\_ID / TELEGRAM\\_ADMIN\\_CHAT\\_ID)",
+        "  /whoami — show your user id (use for TELEGRAM\\_ADMIN\\_USER\\_IDS)",
+        "  /start — short welcome",
+        "  /help — this message",
+    ]
+
+    if is_admin:
+        lines += [
+            "",
+            "━━━━━━━━━━━━━━━━━━━━━",
+            "*Admin commands*",
+            "",
+            "*Draft → Approve flow* (recommended)",
+            "  /draft <mode> — generate a post and show Approve / Regenerate / Discard buttons",
+            "  /knowledge — shortcut for `/draft knowledge` (brand-philosophy post from docs/)",
+            "",
+            "  Modes: `daily`, `weekly`, `monthly`, `greeting`, `gold`, `exposure`, `strategies`, `knowledge`",
+            "",
+            "*Direct publish* (skips approval — be careful)",
+            "  /broadcast <text> — send a custom message to the public channel",
+            "  /force\\_daily, /force\\_weekly, /force\\_monthly",
+            "  /force\\_greeting, /force\\_gold",
+            "  /force\\_exposure, /force\\_strategies, /force\\_knowledge",
+            "",
+            "*AI assist & previews*",
+            "  /ask <prompt> — free-form AI Q&A (reply stays in this chat)",
+            "  /dryrun <mode> — render a post here without publishing",
+            "",
+            "*Brand docs*",
+            "  /docs — list loaded PDFs, daily.md focus, dated notes",
+            "",
+            "*System*",
+            "  /reload\\_env — re-read `.env` without restarting the service",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━━",
+            "*Scheduled posts* (auto, all Manila time)",
+            "",
+            "  • Daily recap — 23:00 every day",
+            "  • Weekly recap — Saturdays 06:00",
+            "  • Monthly recap — last day 23:00",
+            "  • Gold update — every 8h (00/08/16)",
+            "  • Exposure state — every `EXPOSURE_HOURS`",
+            "  • Strategy summary — Sundays 20:00",
+            "  • Knowledge of the day — `KNOWLEDGE_HOUR`:00",
+            "",
+            "_With TELEGRAM\\_ADMIN\\_CHAT\\_ID set, all scheduled posts land here as drafts for approval — nothing auto-publishes._",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━━",
+            "*Tips*",
+            "  • Tap 🔄 Regenerate on a draft to roll a fresh take without re-running /draft",
+            "  • Edit `docs/daily.md` to steer the next /knowledge post",
+            "  • Drop `docs/notes/YYYY-MM-DD.md` for dated brand context",
+        ]
+    else:
+        lines += [
+            "",
+            "_Admin commands are hidden — your user id is not on the allowlist._",
+            "_Use /whoami to get your id, then ask the operator to add it._",
+        ]
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
 async def cmd_chatid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -544,7 +609,7 @@ def run_polling():
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", cmd_start))
-    app.add_handler(CommandHandler("help", cmd_start))
+    app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("chatid", cmd_chatid))
     app.add_handler(CommandHandler("whoami", cmd_whoami))
     app.add_handler(CommandHandler("daily", cmd_daily))
