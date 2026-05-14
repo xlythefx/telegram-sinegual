@@ -16,6 +16,9 @@ smoke.err
 # Watcher state — must NOT be committed (per-deployment cursor)
 state.json
 
+# Brand-docs extraction cache (rebuilt per host on first run)
+docs/.cache.json
+
 # OS junk
 Thumbs.db
 .DS_Store

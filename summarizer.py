@@ -55,6 +55,57 @@ def _ask_claude(system: str, user: str, max_tokens: int = 400) -> str:
     return next(b.text for b in response.content if b.type == "text").strip()
 
 
+_ASK_SYSTEM = (
+    "You are SineguAlerts' internal admin assistant. The user is a staff member "
+    "asking questions in a private admin Telegram group. Answer concisely and "
+    "practically. You can discuss the trading system, draft content, suggest "
+    "wording for announcements, or help with operational reasoning. "
+    "Keep replies under 250 words unless the question genuinely needs more. "
+    "Plain text — no markdown headers."
+)
+
+
+def ask(prompt: str) -> str:
+    """Free-form Q&A for the admin group (/ask command)."""
+    return _ask_claude(_ASK_SYSTEM, prompt, max_tokens=700)
+
+
+# ---- knowledge-of-the-day post (brand-philosophy stream) ----------------------
+
+_KNOWLEDGE_SYSTEM = (
+    "You are SineguAlerts' brand-voice publisher. Write a SHORT 'knowledge of "
+    "the day' post for the public Telegram channel, drawing from the brand "
+    "context provided below. Pick ONE small idea, principle, or archetype — "
+    "do not try to summarize everything. Translate it into a thought the reader "
+    "can apply today. Tone: grounded, reflective, slightly philosophical, never "
+    "preachy. Under 110 words. At most 1-2 emojis. No trading talk, no signals, "
+    "no calls to action. End with a single quiet line, not a tagline.\n\n"
+    "If a 'TODAY'S FOCUS' section is provided, anchor the post around that "
+    "idea specifically; otherwise pick freely from the brand context."
+)
+
+
+def generate_knowledge_post() -> str:
+    """Daily brand-philosophy post. Reads docs/ for context."""
+    from docs_loader import load_brand_context, load_daily_focus
+
+    brand = load_brand_context(max_chars=10000)
+    focus = load_daily_focus()
+
+    parts = []
+    if focus:
+        parts.append(f"TODAY'S FOCUS:\n{focus}")
+    if brand:
+        parts.append(f"BRAND CONTEXT:\n{brand}")
+    parts.append(
+        "Write today's knowledge-of-the-day post for the channel. "
+        "Vary the angle so it doesn't feel like the same post as yesterday."
+    )
+    user_prompt = "\n\n".join(parts)
+
+    return _ask_claude(_KNOWLEDGE_SYSTEM, user_prompt, max_tokens=500)
+
+
 _GREETING_SYSTEM = (
     "You are SineguAlerts' community publisher. Write a SHORT casual greeting "
     "for our Telegram channel — like a friend checking in. Vary the wording every time. "

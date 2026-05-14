@@ -50,6 +50,8 @@ or double-click `Launch UI.bat`. Includes a System Status modal for ad-hoc relea
 
 When the service is running, the bot listens for these in any chat it's a member of:
 
+**Public** (anyone in the chat can use):
+
 | Command | Purpose |
 |---|---|
 | `/daily` `/weekly` `/monthly` | Trade recaps (casual voice) |
@@ -58,7 +60,51 @@ When the service is running, the bot listens for these in any chat it's a member
 | `/exposure` | Current open-position exposure (operational tone) |
 | `/strategies` | Last 7-day strategy breakdown |
 | `/chatid` | Show current chat id (for setting `TELEGRAM_CHANNEL_ID`) |
+| `/whoami` | Show your Telegram user id (for `TELEGRAM_ADMIN_USER_IDS`) |
 | `/help` | List commands |
+
+**Admin-only** (user must be listed in `TELEGRAM_ADMIN_USER_IDS`):
+
+| Command | Purpose |
+|---|---|
+| `/broadcast <text>` | Send a custom message to the public channel (skips approval) |
+| `/draft <mode>` | Generate a post and show it with Approve / Regenerate / Discard buttons. Modes: `daily`, `weekly`, `monthly`, `greeting`, `gold`, `exposure`, `strategies`, `knowledge` |
+| `/knowledge` | Shortcut for `/draft knowledge` — brand-philosophy post from `docs/` |
+| `/ask <prompt>` | Free-form AI assist (reply stays in the current chat) |
+| `/dryrun <mode>` | Render a post here without publishing |
+| `/docs` | List loaded brand docs (PDFs + daily.md + notes) and their sizes |
+| `/force_<mode>` | Build and publish to the public channel immediately, skipping approval |
+| `/reload_env` | Re-read `.env` without restarting the service |
+
+### Setting up the admin group
+
+1. Create a **private Telegram group** (not a channel — groups support two-way commands and inline buttons).
+2. Add the bot, then promote it to admin.
+3. In @BotFather: `/setprivacy` → your bot → **Disable** (so the bot can see plain commands). Remove + re-add the bot to the group after changing this.
+4. Each staff member sends `/whoami` to the bot — copy the user IDs.
+5. In the admin group, type `/chatid` — copy the negative number.
+6. In `.env`:
+   ```
+   TELEGRAM_ADMIN_USER_IDS=12345678,87654321
+   TELEGRAM_ADMIN_CHAT_ID=-5296077425
+   ```
+7. Restart the service (or run `/reload_env` from an existing admin).
+
+### Approval-gated scheduled posts
+
+When `TELEGRAM_ADMIN_CHAT_ID` is set, **no scheduled post auto-publishes to the public channel**. Every scheduled job (daily recap, weekly recap, monthly recap, gold update, exposure state, strategy summary, knowledge of the day) lands in the admin group as a draft with Approve / Regenerate / Discard buttons. The post only reaches the public channel when an admin taps Approve.
+
+Leave `TELEGRAM_ADMIN_CHAT_ID` blank to fall back to legacy direct-publish behavior.
+
+### Brand-knowledge docs (`docs/`)
+
+Drop PDF, Markdown, or text files into `docs/` to feed the AI's brand voice. They're loaded into the system prompt for `/knowledge` (and the scheduled `knowledge_post` job).
+
+- `docs/*.pdf`, `docs/*.md`, `docs/*.txt` — long-form brand/philosophy material (rarely changes). Extracted once and cached to `docs/.cache.json` by mtime.
+- `docs/daily.md` — "today's focus" file. Edit it whenever you want to steer the next knowledge post toward a particular idea. Always re-read fresh (no cache).
+- `docs/notes/YYYY-MM-DD.md` — dated archive of past daily notes. Auto-loaded for the most recent 7 days.
+
+Run `/docs` from the admin group to see what's currently loaded.
 
 ## Schedule (all Asia/Manila)
 
@@ -70,6 +116,9 @@ When the service is running, the bot listens for these in any chat it's a member
 | `gold_update` | every 8h (00:00 / 08:00 / 16:00) | casual | (always on) |
 | `exposure_state` | every `EXPOSURE_HOURS` | operational | `EXPOSURE_HOURS=0` |
 | `strategy_summary` | Sundays 20:00 (window=`STRATEGY_DAYS`d) | operational | `STRATEGY_DAYS=0` |
+| `knowledge_post` | every day at `KNOWLEDGE_HOUR`:00 (default 09:00) | brand/philosophical | `KNOWLEDGE_HOUR=-1` |
+
+**Approval gating**: with `TELEGRAM_ADMIN_CHAT_ID` set, none of the above auto-publishes — drafts land in the admin group for Approve/Regenerate/Discard.
 
 Times come from `TIMEZONE` in `.env` (default `Asia/Manila`).
 
